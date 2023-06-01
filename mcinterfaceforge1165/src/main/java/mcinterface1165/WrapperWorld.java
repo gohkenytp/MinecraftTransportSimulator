@@ -260,6 +260,15 @@ public class WrapperWorld extends AWrapperWorld {
     }
 
     @Override
+    public List<IWrapperPlayer> getAllPlayers() {
+        List<IWrapperPlayer> players = new ArrayList<>();
+        for (PlayerEntity player : world.players()) {
+            players.add(WrapperPlayer.getWrapperFor(player));
+        }
+        return players;
+    }
+
+    @Override
     public List<IWrapperEntity> getEntitiesHostile(IWrapperEntity lookingEntity, double radius) {
         List<IWrapperEntity> entities = new ArrayList<>();
         Entity mcLooker = ((WrapperEntity) lookingEntity).entity;
@@ -909,9 +918,9 @@ public class WrapperWorld extends AWrapperWorld {
         //Note that the client world never calls this method: to do client ticks we need to use the client interface.
         if (!event.world.isClientSide && event.world.equals(world)) {
             if (event.phase.equals(Phase.START)) {
-                runTick(true);
+                runTick(this, true);
             } else {
-                runTick(false);
+                runTick(this, false);
             }
         }
     }
@@ -923,7 +932,7 @@ public class WrapperWorld extends AWrapperWorld {
     public void on(WorldEvent.Save event) {
         //Need to check if it's our world, because Forge is stupid like that.
         if (event.getWorld() == world) {
-            saveEntities();
+            saveEntities(this);
         }
     }
 
@@ -934,7 +943,7 @@ public class WrapperWorld extends AWrapperWorld {
     public void on(WorldEvent.Unload event) {
         //Need to check if it's our world, because Forge is stupid like that.
         if (event.getWorld() == world) {
-            close();
+            close(this);
             worldWrappers.remove(world);
         }
     }
