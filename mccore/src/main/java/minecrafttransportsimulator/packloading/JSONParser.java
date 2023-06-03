@@ -566,7 +566,7 @@ public class JSONParser {
             if (definitionToOverride instanceof AJSONMultiModelProvider) {
                 AEntityD_Definable.clearObjectCaches((AJSONMultiModelProvider) definitionToOverride);
             }
-            for (AEntityC_Renderable entity : InterfaceManager.clientInterface.getClientWorld().renderableEntities) {
+            for (AEntityC_Renderable entity : InterfaceManager.clientInterface.getClientWorld().entitiesToRender) {
                 if (entity instanceof AEntityD_Definable) {
                     //Reset animations for all entities, as we don't know part linking or instrument placement or whatnot.
                     ((AEntityD_Definable<?>) entity).animationsInitialized = false;

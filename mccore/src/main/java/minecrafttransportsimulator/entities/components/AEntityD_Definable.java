@@ -1214,9 +1214,9 @@ public abstract class AEntityD_Definable<JSONDefinition extends AJSONMultiModelP
     }
 
     @Override
-    protected boolean disableRendering(float partialTicks) {
+    public boolean disableRendering() {
         //Don't render if we don't have a model.
-        return super.disableRendering(partialTicks) || definition.rendering.modelType.equals(ModelType.NONE);
+        return super.disableRendering() || definition.rendering.modelType.equals(ModelType.NONE);
     }
 
     /**

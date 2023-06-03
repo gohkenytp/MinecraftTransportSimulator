@@ -71,55 +71,53 @@ public abstract class AEntityC_Renderable extends AEntityB_Existing {
     public final void render(boolean blendingEnabled, float partialTicks) {
         //If we need to render, do so now.
         world.beginProfiling("RenderSetup", true);
-        if (!disableRendering(partialTicks)) {
 
-            //Get interpolated orientation if required.
-            if (requiresDeltaUpdates()) {
-                getInterpolatedOrientation(interpolatedOrientationHolder, partialTicks);
-            } else {
-                interpolatedOrientationHolder.set(orientation);
-            }
-
-            //Set up matrixes.
-            translatedMatrix.resetTransforms();
-            if (requiresDeltaUpdates()) {
-                interpolatedPositionHolder.set(prevPosition).interpolate(position, partialTicks).subtract(position);
-                translatedMatrix.setTranslation(interpolatedPositionHolder);
-            }
-            rotatedMatrix.set(translatedMatrix);
-            rotatedMatrix.applyRotation(interpolatedOrientationHolder);
-            interpolatedScaleHolder.set(scale).subtract(prevScale).scale(partialTicks).add(prevScale);
-            rotatedMatrix.applyScaling(interpolatedScaleHolder);
-
-            //Render the main model.
-            world.endProfiling();
-            renderModel(rotatedMatrix, blendingEnabled, partialTicks);
-
-            //End rotation render matrix.
-            //Render holoboxes.
-            if (blendingEnabled) {
-                renderHolographicBoxes(translatedMatrix);
-            }
-
-            //Render bounding boxes.
-            if (!blendingEnabled && InterfaceManager.renderingInterface.shouldRenderBoundingBoxes()) {
-                world.beginProfiling("BoundingBoxes", true);
-                renderBoundingBoxes(translatedMatrix);
-                world.endProfiling();
-            }
-
-            //Handle sounds.  These will be partial-tick only ones.
-            //Normal sounds are handled on the main tick loop.
-            world.beginProfiling("Sounds", true);
-            updateSounds(partialTicks);
+        //Get interpolated orientation if required.
+        if (requiresDeltaUpdates()) {
+            getInterpolatedOrientation(interpolatedOrientationHolder, partialTicks);
+        } else {
+            interpolatedOrientationHolder.set(orientation);
         }
+
+        //Set up matrixes.
+        translatedMatrix.resetTransforms();
+        if (requiresDeltaUpdates()) {
+            interpolatedPositionHolder.set(prevPosition).interpolate(position, partialTicks).subtract(position);
+            translatedMatrix.setTranslation(interpolatedPositionHolder);
+        }
+        rotatedMatrix.set(translatedMatrix);
+        rotatedMatrix.applyRotation(interpolatedOrientationHolder);
+        interpolatedScaleHolder.set(scale).subtract(prevScale).scale(partialTicks).add(prevScale);
+        rotatedMatrix.applyScaling(interpolatedScaleHolder);
+
+        //Render the main model.
+        world.endProfiling();
+        renderModel(rotatedMatrix, blendingEnabled, partialTicks);
+
+        //End rotation render matrix.
+        //Render holoboxes.
+        if (blendingEnabled) {
+            renderHolographicBoxes(translatedMatrix);
+        }
+
+        //Render bounding boxes.
+        if (!blendingEnabled && InterfaceManager.renderingInterface.shouldRenderBoundingBoxes()) {
+            world.beginProfiling("BoundingBoxes", true);
+            renderBoundingBoxes(translatedMatrix);
+            world.endProfiling();
+        }
+
+        //Handle sounds.  These will be partial-tick only ones.
+        //Normal sounds are handled on the main tick loop.
+        world.beginProfiling("Sounds", true);
+        updateSounds(partialTicks);
         world.endProfiling();
     }
 
     /**
      * If rendering needs to be skipped for any reason, return true here.
      */
-    protected boolean disableRendering(float partialTicks) {
+    public boolean disableRendering() {
         //Don't render on the first tick, as we might have not created some variables yet.
         return ticksExisted == 0;
     }

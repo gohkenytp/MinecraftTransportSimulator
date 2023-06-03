@@ -1,19 +1,18 @@
 package mcinterface1122;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import minecrafttransportsimulator.baseclasses.BoundingBox;
+import minecrafttransportsimulator.baseclasses.Damage;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.entities.components.AEntityB_Existing;
+import minecrafttransportsimulator.entities.components.AEntityE_Interactable;
 import minecrafttransportsimulator.entities.components.AEntityF_Multipart;
 import minecrafttransportsimulator.entities.instances.APart;
-import minecrafttransportsimulator.items.components.AItemPack;
-import minecrafttransportsimulator.items.components.IItemEntityProvider;
-import minecrafttransportsimulator.items.components.IItemEntityProvider.IItemEntityFactory;
+import minecrafttransportsimulator.entities.instances.EntityVehicleF_Physics;
 import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
-import minecrafttransportsimulator.packloading.PackParser;
+import minecrafttransportsimulator.systems.ConfigSystem;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.DamageSource;
@@ -40,10 +39,6 @@ import net.minecraftforge.fml.common.registry.EntityEntryBuilder;
  */
 @EventBusSubscriber
 public class BuilderEntityExisting extends ABuilderEntityBase {
-    /**
-     * Maps Entity class names to instances of the IItemEntityProvider class that creates them.
-     **/
-    protected static final Map<String, IItemEntityFactory> entityMap = new HashMap<>();
 
     /**
      * Current entity we are built around.  This MAY be null if we haven't loaded NBT from the server yet.
@@ -53,6 +48,14 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
      * Last saved explosion position (used for damage calcs).
      **/
     private static Point3D lastExplosionPosition;
+    /**
+     * Collective for interaction boxes.  These are used by this entity to allow players to interact with it.
+     **/
+    private WrapperAABBCollective interactionBoxes;
+    /**
+     * Collective for collision boxes.  These are used by this entity to make things collide with it.
+     **/
+    public WrapperAABBCollective collisionBoxes;
 
     public BuilderEntityExisting(World world) {
         super(world);
@@ -71,33 +74,35 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
                 //Set the new position. 
                 setPosition(entity.position.x, entity.position.y, entity.position.z);
 
-                //If we are outside valid bounds on the server, set us as dead and exit.
-                if (!world.isRemote && posY < 0 && world.isOutsideBuildHeight(getPosition())) {
-                    setDead();
+                if (entity instanceof AEntityE_Interactable) {
+                    AEntityE_Interactable<?> interactable = ((AEntityE_Interactable<?>) entity);
+
+                    //Update AABBs.
+                    //We need to know if we need to increase the max world collision bounds to detect this entity.
+                    //Only do this after the first tick of the entity, as we might have some states that need updating
+                    //on that first tick that would cause bad maths.
+                    //We also do this only every second, as it prevents excess checks.
+                    entity.world.beginProfiling("CollisionOverhead", true);
+                    interactionBoxes = new WrapperAABBCollective(interactable.encompassingBox, interactable.getInteractionBoxes());
+                    collisionBoxes = new WrapperAABBCollective(interactable.encompassingBox, interactable.getCollisionBoxes());
+                    if (entity instanceof EntityVehicleF_Physics && interactable.ticksExisted > 1 && interactable.ticksExisted % 20 == 0) {
+                        setSize((float) Math.max(interactable.encompassingBox.widthRadius * 2F, interactable.encompassingBox.depthRadius * 2F), (float) interactable.encompassingBox.heightRadius * 2F);
+                        //Make sure the collision bounds for MC are big enough to collide with this entity.
+                        double maxEntityRadius = World.MAX_ENTITY_RADIUS;
+                        if (maxEntityRadius < interactable.encompassingBox.widthRadius || maxEntityRadius < interactable.encompassingBox.heightRadius || maxEntityRadius < interactable.encompassingBox.depthRadius) {
+                            World.MAX_ENTITY_RADIUS = Math.max(Math.max(interactable.encompassingBox.widthRadius, interactable.encompassingBox.depthRadius), interactable.encompassingBox.heightRadius);
+                        }
+                    }
                     entity.world.endProfiling();
-                    entity.world.endProfiling();
-                    return;
                 }
             }
         } else {
             //If we have NBT, and haven't loaded it, do so now.
             if (!loadedFromSavedNBT && loadFromSavedNBT) {
                 WrapperWorld worldWrapper = WrapperWorld.getWrapperFor(world);
-                try {
-                    WrapperNBT data = new WrapperNBT(lastLoadedNBT);
-                    entity = entityMap.get(lastLoadedNBT.getString("entityid")).createEntity(worldWrapper, null, data);
-                    if (entity instanceof AEntityF_Multipart) {
-                        ((AEntityF_Multipart<?>) entity).addPartsPostConstruction(null, data);
-                    }
-                    entity.world.addEntity(entity);
-                    loadedFromSavedNBT = true;
-                    lastLoadedNBT = null;
-                    //Kill us since we created our entity we needed to, we don't need to exist anymore.
-                    //This will remove our current entity, but will keep the "copy" that was created by the core system.
-                    setDead();
-                } catch (Exception e) {
-                    InterfaceManager.coreInterface.logError("Failed to load entity on builder from saved NBT.  Did a pack change?");
-                    InterfaceManager.coreInterface.logError(e.getMessage());
+                entity = worldWrapper.getEntity(lastLoadedNBT.getUniqueId("entityid"));
+                if (entity == null && !worldWrapper.isClient()) {
+                    //Entity doesn't exist, die.
                     setDead();
                 }
             }
@@ -105,17 +110,7 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
     }
 
     @Override
-    public void setDead() {
-        super.setDead();
-        //Notify internal entity of it being invalid.
-        if (entity != null) {
-            entity.remove();
-        }
-    }
-
-    @Override
     public boolean attackEntityFrom(DamageSource source, float amount) {
-        /*
         if (ConfigSystem.settings.damage.allowExternalDamage.value && !world.isRemote && entity instanceof AEntityE_Interactable) {
             AEntityE_Interactable<?> interactable = ((AEntityE_Interactable<?>) entity);
             if (interactable instanceof EntityVehicleF_Physics) {
@@ -160,20 +155,13 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
                         damage = new Damage(amount, interactionBoxes.lastBoxRayTraced, null, playerSource, null);
                     }
                 }
-<<<<<<< HEAD
 
                 //If we have damage on a point that's not armor, attack it now.
                 if (damage != null && (damage.box == null || damage.box.definition == null || damage.box.definition.armorThickness == 0)) {
-=======
-        
-                //If we have damage on a point, attack it now.
-                if (damage != null) {
->>>>>>> parent of 71daa333... Reverted entity loading since this has multiple issues and should probably be on its own branch to implement.
                     interactable.attack(damage);
                 }
             }
         }
-        */
         return true;
     }
 
@@ -198,10 +186,7 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
     public NBTTagCompound writeToNBT(NBTTagCompound tag) {
         super.writeToNBT(tag);
         if (entity != null) {
-            //Entity is valid, save it and return the modified tag.
-            //Also save the class ID so we know what to construct when MC loads this Entity back up.
-            entity.save(new WrapperNBT(tag));
-            tag.setString("entityid", entity.getClass().getSimpleName());
+            tag.setUniqueId("entityid", entity.uniqueUUID);
         }
         return tag;
     }
@@ -224,14 +209,7 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
      */
     @SubscribeEvent
     public static void registerEntities(RegistryEvent.Register<EntityEntry> event) {
-        //Iterate over all pack items and find those that spawn entities.
-        for (AItemPack<?> packItem : PackParser.getAllPackItems()) {
-            if (packItem instanceof IItemEntityProvider) {
-                ((IItemEntityProvider) packItem).registerEntities(entityMap);
-            }
-        }
-
-        //Now register our own classes.
+        //Register our own classes.
         event.getRegistry().register(EntityEntryBuilder.create().entity(BuilderEntityExisting.class).id(new ResourceLocation(InterfaceManager.coreModID, "mts_entity"), 0).name("mts_entity").tracker(32 * 16, 5, false).build());
     }
 }
