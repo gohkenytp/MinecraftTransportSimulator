@@ -525,6 +525,11 @@ public abstract class APart extends AEntityF_Multipart<JSONPart> {
     }
 
     @Override
+    public boolean canRenderAtDistance(Point3D playerPosition, int gameRenderDistance) {
+        return masterEntity.canRenderAtDistance(playerPosition, gameRenderDistance);
+    }
+
+    @Override
     public boolean shouldRenderBeams() {
         return entityOn.shouldRenderBeams();
     }
