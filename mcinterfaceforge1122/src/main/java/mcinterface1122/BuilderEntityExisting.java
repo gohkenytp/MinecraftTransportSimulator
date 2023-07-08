@@ -134,13 +134,8 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
                 Damage damage = null;
                 //Check the damage at the current position of the attacker.
                 Point3D attackerPosition = new Point3D(attacker.posX, attacker.posY, attacker.posZ);
-<<<<<<< HEAD
                 for (BoundingBox box : interactionBoxes.boxes) {
                     if (box.isPointInside(attackerPosition, null)) {
-=======
-                for (BoundingBox box : ((AEntityE_Interactable<?>) entity).getCollisionBoxes()) {
-                    if (box.isPointInside(attackerPosition)) {
->>>>>>> Reset the reset.
                         damage = new Damage(amount, box, null, playerSource, null);
                         break;
                     }
